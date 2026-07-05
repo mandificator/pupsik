@@ -1,0 +1,1532 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PUPSIK — Made Once, for One</title>
+<meta name="description" content="Each PUPSIK is made once, for one person. A handcrafted luxury doll composed from materials shared by the great houses themselves.">
+<meta name="theme-color" content="#D9D9D9">
+<meta property="og:title" content="PUPSIK">
+<meta property="og:description" content="Each PUPSIK is made once, for one person. A handcrafted luxury doll composed from materials shared by the great houses themselves.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="01.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+<style>
+  html,body{margin:0;height:100%;background:#D9D9D9;font-family:-apple-system,system-ui,sans-serif;overflow:hidden;color:#111}
+  /* #story is kept in the DOM (invisible — covered by the WebGL canvas)
+     only so the browser computes letter layout that the canvas renderer can read. */
+  #three{position:fixed;inset:0;z-index:6;display:block;pointer-events:none}
+  #nav{position:fixed;bottom:34px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:5}
+  #nav i{width:24px;height:2px;background:rgba(0,0,0,.22);transition:background .4s,width .4s;cursor:pointer}
+  #nav i.on{background:#111;width:36px}
+  #story, #outro{
+    position:fixed;left:50%;top:5vh;bottom:5vh;
+    display:flex;flex-direction:column;justify-content:center;
+    font-family:-apple-system,system-ui,"Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-weight:600;
+    line-height:1.12;color:#111;
+    letter-spacing:-0.005em;
+    z-index:4;
+    pointer-events:none;
+    visibility:hidden;
+    transform:translate(-50%,0);
+  }
+  #story{ width:90vw; }
+  #outro{
+    width:30vw;
+    text-align:center;
+    overflow-wrap:break-word;
+  }
+  @media (max-width:767px), (max-width:1023px) and (orientation:portrait){
+    #story{ width:90vw; top:0; bottom:0; padding:3vh 5vw; height:100%; height:100dvh; box-sizing:border-box; overflow:hidden; }
+    #outro{ width:82vw; }
+    #wrap{ width:96vw; top:0; bottom:0; padding:0; height:100vh; height:100dvh; box-sizing:border-box; }
+  }
+  #wrap{
+    position:fixed;left:50%;top:5vh;bottom:5vh;
+    width:90vw;
+    display:flex;flex-direction:column;justify-content:center;
+    font-family:-apple-system,system-ui,"Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-weight:600;
+    line-height:1.12;color:#111;
+    letter-spacing:-0.005em;
+    z-index:4;
+    pointer-events:none;
+    visibility:hidden;
+    transform:translate(-50%,0);
+    text-align:justify;
+  }
+  #wrap p{margin:0 0 0.55em 0}
+  #wrap p:last-child{margin-bottom:0}
+  #story p{margin:0 0 0.55em 0}
+  #story p:last-child{margin-bottom:0}
+  #story .ltr{
+    display:inline-block;
+    transition:transform .22s cubic-bezier(.2,.8,.2,1);
+    will-change:transform;
+  }
+</style>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./three.module.js"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="story">
+    <p>No two snowflakes share a geometry. No two irises read alike. No two cherry trees, even standing side by side, even in the same season, will bloom the same way twice.</p>
+    <p>PUPSIK works by the same principle. Each one is made once, for one person, and that is where it begins. Not as a policy. Simply because repeating it would miss the point entirely.</p>
+    <p>A PUPSIK is built around someone specific: the way they occupy a room, the things they reach for without deliberating, the small signals that only the people closest to them have learned to read. It doesn't try to capture who they are. It tries to complete the picture.</p>
+  </div>
+  <div id="outro">
+    <p>PUPSIK draws from materials that have already passed the most exacting tests, sourced from the ateliers behind the great houses, selected because they say something worth saying.</p>
+    <p>We call it respect. Each material arrives with a history. PUPSIK gives it a new one.</p>
+  </div>
+  <div id="wrap">
+    <p>PUPSIK has no factory. No shift, no schedule, no quota on the wall. A PUPSIK is born when the conditions are right: a bright morning, a quiet evening, or one of those rare nights when something larger than intention takes over.</p>
+    <p>Around the table: good thoughts, a clear conscience, and Rachmaninoff. Sometimes Scriabin. Sometimes Shostakovich, when the work asks for weight. The scent in the air is snowdrop, or rose, or quince. Never the same, never planned.</p>
+    <p>Some would call it slow fashion. We don't call it anything so modest. This is creation in the older sense of the word: the act of breathing life into a piece of silk, a panel of leather, a length of cotton, until it becomes something that could only ever be a PUPSIK.</p>
+    <p>There is no pattern. No archive. No second draft. Each one arrives into the world fully itself, shaped by the morning or the night that made it, and by the person it was always going to belong to.</p>
+  </div>
+  <div id="nav"></div>
+
+<script type="module">
+import * as THREE from 'three';
+
+const _mob = window.innerWidth < 768 || (window.innerWidth < 1024 && window.innerHeight > window.innerWidth);
+const _sfx = _mob ? '_m.png' : '.png';
+const SRC      = ["01"+_sfx, "02"+_sfx, "03"+_sfx];
+const GRID_SRC = ["02"+_sfx, "03"+_sfx, "04"+_sfx, "05"+_sfx, "06"+_sfx, "07"+_sfx];
+const WRAP_SRC = "00"+_sfx;
+const MODEL_SRC = "model"+_sfx;
+
+const nav = document.getElementById('nav');
+
+const IMG_W = _mob ? 1138 : 2266, IMG_H = _mob ? 1770 : 1888;
+const ASPECT = IMG_W / IMG_H;
+const ASPECT_LOGO = 3636 / 1392;
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+const isMobile = () => window.innerWidth < 768 || (window.innerWidth < 1024 && window.innerHeight > window.innerWidth);
+
+let idx = 0;
+let prevIdx = 0;
+let slideT = 1;       // 1 = fully on current slide, 0 = just switched
+const imgs     = [];   // 3 slide images (01–03)
+const gridImgs = [];   // 6 grid images (02–07)
+const wrapImg  = new Image();
+const modelImg = new Image();
+let wrapMaskCache = null;
+
+let mouseNx = 0, mouseNy = 0;
+
+// =====================================================================
+// Scene canvas — full-screen composite of slide + text + grid.
+// This is what the WebGL shader samples as the background to refract.
+// =====================================================================
+const sceneCanvas = document.createElement('canvas');
+const sceneCtx    = sceneCanvas.getContext('2d');
+let sceneW = 0, sceneH = 0;
+let textFontSize = 64;
+
+function resizeScene(){
+  const W = window.innerWidth, H = window.innerHeight;
+  if(sceneW !== W || sceneH !== H){
+    sceneW = W; sceneH = H;
+    sceneCanvas.width  = Math.round(W * DPR);
+    sceneCanvas.height = Math.round(H * DPR);
+  }
+}
+
+const FONT_FAMILY = '-apple-system, system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif';
+const FONT_WEIGHT = '600';
+
+// Brand layout cache (positions in grid AND in header)
+const brandLayouts = [];
+let headerFontSize = 16;
+const HEADER_SEP = '  |  ';
+let headerY = 30;
+
+function computeUnifiedFont(){
+  const W = window.innerWidth, H = window.innerHeight;
+  const cols = 5, rows = 3;
+  const cellW = W / cols;
+  const cellH = H / rows;
+  let fontSize;
+  const probe = document.createElement('canvas').getContext('2d');
+  if(isMobile()){
+    // On mobile, find the largest font size that makes story text fill the screen
+    fontSize = W * 0.038;
+  } else {
+    fontSize = Math.min(cellW * 0.16, cellH * 0.32);
+    probe.font = `${FONT_WEIGHT} ${fontSize}px ${FONT_FAMILY}`;
+    let widest = 0;
+    for(const b of BRANDS){
+      const w = probe.measureText(b).width;
+      if(w > widest) widest = w;
+    }
+    const limit = cellW * 0.85;
+    if(widest > limit) fontSize *= limit / widest;
+  }
+  textFontSize = fontSize;
+  storyEl.style.fontSize = fontSize + 'px';
+  outroEl.style.fontSize = fontSize + 'px';
+  wrapEl.style.fontSize  = fontSize + 'px';
+  cacheLetters(storyEl, letters,      storyBase);
+  cacheLetters(outroEl, outroLetters, outroBase);
+  cacheLetters(wrapEl,  wrapLetters,  wrapBase);
+  computeBrandLayouts();
+  computeWrapLetterPush();
+}
+
+function computeBrandLayouts(){
+  const W = window.innerWidth, H = window.innerHeight;
+  const cols = 5, rows = 3;
+  const cellW = W / cols;
+  const cellH = H / rows;
+  // Header font: shrink so the joined string fits in 96vw
+  let hf = textFontSize * 0.45;
+  const probe = document.createElement('canvas').getContext('2d');
+  function lineWidth(fs){
+    probe.font = `${FONT_WEIGHT} ${fs}px ${FONT_FAMILY}`;
+    let total = 0;
+    for(let i = 0; i < BRANDS.length; i++){
+      total += probe.measureText(BRANDS[i]).width;
+      if(i < BRANDS.length - 1) total += probe.measureText(HEADER_SEP).width;
+    }
+    return total;
+  }
+  const limit = W * 0.96;
+  let lw = lineWidth(hf);
+  if(lw > limit) hf *= limit / lw;
+  headerFontSize = hf;
+  lw = lineWidth(hf);
+  probe.font = `${FONT_WEIGHT} ${hf}px ${FONT_FAMILY}`;
+  const sepW = probe.measureText(HEADER_SEP).width;
+  headerY = H * 0.045;
+
+  brandLayouts.length = 0;
+  let cur = (W - lw) / 2;
+  for(let i = 0; i < BRANDS.length; i++){
+    const w = probe.measureText(BRANDS[i]).width;
+    const r = Math.floor(i / cols);
+    const cc = i % cols;
+    brandLayouts.push({
+      gridX: cc * cellW + cellW / 2,
+      gridY: r  * cellH + cellH / 2,
+      headerX: cur + w / 2,
+      headerY: headerY,
+    });
+    cur += w + sepW;
+  }
+}
+
+// ---- Doll alpha mask cache (per slide) ----
+const MASK_RES = 220;
+const dollMasks = [];
+function getDollMask(i){
+  if(dollMasks[i]) return dollMasks[i];
+  const im = imgs[i];
+  if(!im || !im.complete || !im.naturalWidth) return null;
+  const ir = im.naturalWidth / im.naturalHeight;
+  const w = ir > 1 ? MASK_RES : Math.round(MASK_RES * ir);
+  const h = ir > 1 ? Math.round(MASK_RES / ir) : MASK_RES;
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const c = cv.getContext('2d');
+  c.drawImage(im, 0, 0, w, h);
+  const data = c.getImageData(0, 0, w, h).data;
+  const mask = new Uint8Array(w * h);
+  for(let k = 0, j = 0; k < data.length; k += 4, j++){
+    if(data[k + 3] > 32) mask[j] = 1;
+  }
+  dollMasks[i] = { mask, w, h };
+  return dollMasks[i];
+}
+function letterInDoll(lx, ly, dollRect, mask){
+  if(!mask) return false;
+  if(lx < dollRect.x || lx >= dollRect.x + dollRect.w) return false;
+  if(ly < dollRect.y || ly >= dollRect.y + dollRect.h) return false;
+  const u = (lx - dollRect.x) / dollRect.w;
+  const v = (ly - dollRect.y) / dollRect.h;
+  const mx = Math.min(mask.w - 1, Math.floor(u * mask.w));
+  const my = Math.min(mask.h - 1, Math.floor(v * mask.h));
+  return mask.mask[my * mask.w + mx] === 1;
+}
+function letterInDollPadded(lx, ly, dollRect, mask, pad){
+  if(letterInDoll(lx,       ly,       dollRect, mask)) return true;
+  if(letterInDoll(lx + pad, ly,       dollRect, mask)) return true;
+  if(letterInDoll(lx - pad, ly,       dollRect, mask)) return true;
+  if(letterInDoll(lx,       ly + pad, dollRect, mask)) return true;
+  if(letterInDoll(lx,       ly - pad, dollRect, mask)) return true;
+  if(letterInDoll(lx + pad, ly + pad, dollRect, mask)) return true;
+  if(letterInDoll(lx - pad, ly + pad, dollRect, mask)) return true;
+  if(letterInDoll(lx + pad, ly - pad, dollRect, mask)) return true;
+  if(letterInDoll(lx - pad, ly - pad, dollRect, mask)) return true;
+  return false;
+}
+
+function drawScene(){
+  resizeScene();
+  const W = sceneW, H = sceneH;
+  const c = sceneCtx;
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  c.fillStyle = '#D9D9D9';
+  c.fillRect(0, 0, W, H);
+
+  // Slide (centered, drifts up by storyT) — eased crossfade between prev/cur
+  // wrapT counters storyT so the slide returns to centered in wrap state.
+  {
+    const mob = isMobile();
+    let dispH = Math.round(H * (mob ? 1.0 : 0.94));
+    let dispW = Math.round(dispH * ASPECT);
+    if(dispW > W * (mob ? 1.0 : 0.96)){
+      dispW = Math.round(W * (mob ? 1.0 : 0.96));
+      dispH = Math.round(dispW / ASPECT);
+    }
+    const sx = Math.round((W - dispW) / 2);
+    const baseY = (H - dispH) / 2;
+    let sy = Math.round(baseY - storyT * H * 1.05);
+    // In wrap state, the doll rises from below the screen — but only after
+    // the user scrolls the second time (driven by wrapDollT).
+    if(wrapT > 0.005){
+      if(mob){
+        dispW = Math.round(dispW * 0.5);
+        dispH = Math.round(dispH * 0.5);
+      }
+      const sxW = Math.round((W - dispW) / 2);
+      const baseYW = (H - dispH) / 2;
+      sy = Math.round(baseYW + (1 - wrapT) * H * 1.1 - endingT * H * 1.4);
+    }
+    const eT  = slideT * slideT * (3 - 2 * slideT); // smoothstep
+    if(wrapT > 0.005){
+      // In wrap state we render the dedicated wrap doll instead of the slide
+      const sxW = Math.round((W - dispW) / 2);
+      if(wrapImg.complete && wrapImg.naturalWidth){
+        c.drawImage(wrapImg, sxW, sy, dispW, dispH);
+      }
+    } else {
+      if(slideT < 1 && imgs[prevIdx] && imgs[prevIdx].complete){
+        c.globalAlpha = 1 - eT;
+        c.drawImage(imgs[prevIdx], sx, sy, dispW, dispH);
+      }
+      const cur = imgs[idx];
+      if(cur && cur.complete && cur.naturalWidth){
+        c.globalAlpha = eT;
+        c.drawImage(cur, sx, sy, dispW, dispH);
+      }
+      c.globalAlpha = 1;
+    }
+  }
+
+  // Story text — slides up from below, then up off-top when grid arrives
+  if(storyT > 0.01 && letters.length){
+    const textOffsetY = (1 - storyT) * H - gridT * H * 1.4;
+    c.fillStyle = '#111';
+    c.font = `${FONT_WEIGHT} ${textFontSize}px ${FONT_FAMILY}`;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    for(let i = 0; i < letters.length; i++){
+      const L = letters[i];
+      const lx = storyBase.left + L.offX + L.dx;
+      const ly = storyBase.top  + L.offY + L.dy + textOffsetY;
+      c.fillText(L.ch, lx, ly);
+    }
+  }
+
+  // Header marquee — slides up from below the screen with brandsT, leaves
+  // up off the top with wrapT.
+  if(brandsT > 0.01){
+    c.font = `${FONT_WEIGHT} ${textFontSize}px ${FONT_FAMILY}`;
+    c.textAlign = 'left';
+    c.textBaseline = 'middle';
+    const sep = '   |   ';
+    const fullText = BRANDS.join(sep) + sep;
+    const lineWidth = c.measureText(fullText).width;
+    if(lineWidth > 0){
+      const barH = textFontSize * 1.3;
+      const off = ((marqueeOffset % lineWidth) + lineWidth) % lineWidth;
+      const slideY = (1 - brandsT) * H - wrapT * H * 1.4;
+
+      // Top marquee — page-colored text on black bar
+      const topY = textFontSize * 0.65 + 12 + slideY;
+      c.fillStyle = '#111';
+      c.fillRect(0, topY - barH / 2, W, barH);
+      c.fillStyle = '#D9D9D9';
+      let x = -off;
+      while(x < W){ c.fillText(fullText, x, topY); x += lineWidth; }
+
+      // Bottom marquee — page-colored text on black bar, scrolls opposite direction
+      const botY = H - textFontSize * 0.65 - 12 + slideY;
+      c.fillStyle = '#111';
+      c.fillRect(0, botY - barH / 2, W, barH);
+      c.fillStyle = '#D9D9D9';
+      let x2 = -((marqueeOffset * 0.8) % lineWidth + lineWidth) % lineWidth;
+      while(x2 < W){ c.fillText(fullText, x2, botY); x2 += lineWidth; }
+    }
+  }
+
+  // Doll grid (2x3). Center column rises with brandsT; the whole grid
+  // rises further as wrapT activates so the entire grid leaves the screen.
+  if(gridT > 0.01){
+    const gridY = (1 - gridT) * H;
+    const mob = isMobile();
+    const cols = mob ? 2 : 3, rows = mob ? 3 : 2;
+    const cellW = W / cols;
+    const cellH = H / rows;
+    for(let r = 0; r < rows; r++){
+      for(let cc = 0; cc < cols; cc++){
+        const cell = r * cols + cc;
+        const i = gridPerm[cell];
+        const im = gridImgs[i];
+        if(!im || !im.complete) continue;
+        const ir = im.naturalWidth / im.naturalHeight;
+        const cr = cellW / cellH;
+        let dw, dh;
+        if(ir > cr){ dw = cellW; dh = cellW / ir; }
+        else       { dh = cellH; dw = cellH * ir; }
+        const dx = cc * cellW + (cellW - dw) / 2;
+        const midLift = mob ? (r === 1) : (cc === 1);
+        const lift = wrapT * H * 1.4 + (midLift ? brandsT * H * 1.4 : 0);
+        const dy = r  * cellH + (cellH - dh) / 2 + gridY - lift;
+        c.drawImage(im, dx, dy, dw, dh);
+      }
+    }
+  }
+
+  // Outro text rises from below in brands mode, then up & off when wrap arrives
+  if(brandsT > 0.01 && outroLetters.length){
+    const outroOffsetY = (1 - brandsT) * H - wrapT * H * 1.4;
+    c.fillStyle = '#111';
+    c.font = `${FONT_WEIGHT} ${textFontSize}px ${FONT_FAMILY}`;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    for(let i = 0; i < outroLetters.length; i++){
+      const L = outroLetters[i];
+      const lx = outroBase.left + L.offX + L.dx;
+      const ly = outroBase.top  + L.offY + L.dy + outroOffsetY;
+      c.fillText(L.ch, lx, ly);
+    }
+  }
+
+  // Ending — three big lines centered on screen, sliding up from below.
+  // Rises off the top when modelT activates. The third line cycles between
+  // ENDING_LINES with its own slide animation (old word goes up, new comes from below).
+  if(endingT > 0.01){
+    const mob = isMobile();
+    let fs = Math.round(Math.min(H, W) * (mob ? 0.11 : 0.18));
+    // Ensure longest ending line fits
+    if(mob){
+      const probe = document.createElement('canvas').getContext('2d');
+      probe.font = `${FONT_WEIGHT} ${fs}px ${FONT_FAMILY}`;
+      const longest = ENDING_LINES.reduce((a, b) => probe.measureText(a).width > probe.measureText(b).width ? a : b);
+      const lw = probe.measureText(longest).width;
+      if(lw > W * 0.9) fs = Math.round(fs * (W * 0.9) / lw);
+    }
+    c.fillStyle = '#111';
+    c.font = `${FONT_WEIGHT} ${fs}px ${FONT_FAMILY}`;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    const lineH = fs * 1.05;
+    const slideUp = (1 - endingT) * H * 1.1 - modelT * H * 1.4;
+    const startY = H / 2 - lineH + slideUp;
+    c.fillText('PUPSIK', W / 2, startY + 0 * lineH);
+    c.fillText('IS',     W / 2, startY + 1 * lineH);
+
+    // Third line — animated word swap, clipped to one line height
+    const thirdY = startY + 2 * lineH;
+    const tEase = endingTransT * endingTransT * (3 - 2 * endingTransT);
+    const slide = lineH * 1.3;
+    const oldOff = -endingDir * tEase * slide;
+    const newOff =  endingDir * (1 - tEase) * slide;
+    c.save();
+    c.beginPath();
+    c.rect(0, thirdY - lineH * 0.6, W, lineH * 1.2);
+    c.clip();
+    if(endingTransT < 1){
+      c.fillText(ENDING_LINES[endingPrevIdx], W / 2, thirdY + oldOff);
+    }
+    c.fillText(ENDING_LINES[endingIdx], W / 2, thirdY + newOff);
+    c.restore();
+  }
+
+  // Model — full image centered, rises from below with modelT.
+  // Stays in place when joinT activates (JOIN text overlays it).
+  if(modelT > 0.01 && modelImg.complete && modelImg.naturalWidth){
+    const mob = isMobile();
+    let dispH = Math.round(H * (mob ? 1.0 : 0.94));
+    let dispW = Math.round(dispH * (modelImg.naturalWidth / modelImg.naturalHeight));
+    if(dispW > W * (mob ? 1.0 : 0.96)){
+      dispW = Math.round(W * (mob ? 1.0 : 0.96));
+      dispH = Math.round(dispW * (modelImg.naturalHeight / modelImg.naturalWidth));
+    }
+    const sx = Math.round((W - dispW) / 2);
+    const sy = Math.round((H - dispH) / 2 + (1 - modelT) * H * 1.1);
+    c.drawImage(modelImg, sx, sy, dispW, dispH);
+  }
+
+  // Four corner links — slide in from edges with joinT
+  joinHits = [];
+  if(joinT > 0.01){
+    const fs = isMobile() ? Math.max(textFontSize, W * 0.05) : textFontSize;
+    c.font = `${FONT_WEIGHT} ${fs}px ${FONT_FAMILY}`;
+    c.fillStyle = '#111';
+    c.textBaseline = 'middle';
+    const pad = W * 0.04;
+    const topY = pad + fs * 0.6;
+    const botY = H - pad - fs * 0.6;
+    const slideX = (1 - joinT) * W * 0.7;
+    const lineH = Math.max(2, fs * 0.05);
+
+    const links = [
+      { text: 'Join Waiting List', x: pad, y: topY, align: 'left',  dir: -1 },
+      { text: 'Telegram',  x: W - pad, y: topY, align: 'right', dir:  1 },
+      { text: 'TikTok',    x: pad,     y: botY, align: 'left',  dir: -1 },
+      { text: 'Instagram', x: W - pad, y: botY, align: 'right', dir: 1 },
+    ];
+
+    for(let li = 0; li < links.length; li++){
+      const lk = links[li];
+      const sx = lk.x + lk.dir * slideX;
+      const displayText = ((li === 2 || li === 3) && joinHoverIdx === li) ? 'Soon' : lk.text;
+      c.textAlign = lk.align;
+      c.fillText(displayText, sx, lk.y);
+      const tw = c.measureText(displayText).width;
+      const ulX = lk.align === 'left' ? sx : sx - tw;
+      c.fillRect(ulX, lk.y + fs * 0.42, tw, lineH);
+      joinHits.push({ x: ulX, y: lk.y - fs * 0.5, w: tw, h: fs, idx: li });
+    }
+  }
+
+  // Wrap state — text fills the screen, skipping any letter whose center
+  // falls inside the centered doll's silhouette.
+  if(wrapT > 0.01 && wrapLetters.length){
+    const wrapScale = isMobile() ? 0.5 : 1;
+    let dispH = Math.round(H * 0.94 * wrapScale);
+    let dispW = Math.round(dispH * ASPECT);
+    if(dispW > W * 0.96 * wrapScale){
+      dispW = Math.round(W * 0.96 * wrapScale);
+      dispH = Math.round(dispW / ASPECT);
+    }
+    const dollRect = {
+      x: Math.round((W - dispW) / 2),
+      y: Math.round((H - dispH) / 2),
+      w: dispW,
+      h: dispH,
+    };
+    const mask = getDollMask(idx);
+    c.fillStyle = '#111';
+    c.font = `${FONT_WEIGHT} ${textFontSize}px ${FONT_FAMILY}`;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    const wrapVisualY = (1 - wrapT) * H * 1.1 - endingT * H * 1.4;
+    for(let i = 0; i < wrapLetters.length; i++){
+      const L = wrapLetters[i];
+      if(L.hide) continue;
+      const lx = wrapBase.left + L.offX + L.dx;
+      const ly = wrapBase.top  + L.offY + L.dy + wrapVisualY;
+      c.fillText(L.ch, lx, ly);
+    }
+  }
+
+  if(three) three.bgTex.needsUpdate = true;
+}
+
+let textBaseLeft = 0, textBaseTop = 0;
+
+// =====================================================================
+// Build a smooth thickness map from logo.png (alpha = thickness)
+// =====================================================================
+function buildThicknessMap(srcImg){
+  const W = 1024;
+  const H = Math.round(W * srcImg.naturalHeight / srcImg.naturalWidth);
+  const cvT = document.createElement('canvas');
+  cvT.width = W; cvT.height = H;
+  const c = cvT.getContext('2d');
+  c.drawImage(srcImg, 0, 0, W, H);
+  const id = c.getImageData(0, 0, W, H);
+  const d = id.data;
+
+  const N = W * H;
+  const bin = new Float32Array(N);
+  for(let i = 0, j = 0; i < d.length; i += 4, j++){
+    const lum = (d[i] + d[i+1] + d[i+2]) / 3;
+    bin[j] = lum < 110 ? 1.0 : 0.0;
+  }
+
+  function boxBlur(src, w, h, r){
+    const dst = new Float32Array(w * h);
+    const tmp = new Float32Array(w * h);
+    const k = 1 / (2 * r + 1);
+    for(let y = 0; y < h; y++){
+      let sum = 0;
+      for(let x = 0; x < r; x++) sum += src[y*w + x];
+      for(let x = 0; x < w; x++){
+        if(x + r < w)         sum += src[y*w + x + r];
+        if(x - r - 1 >= 0)    sum -= src[y*w + x - r - 1];
+        tmp[y*w + x] = sum * k;
+      }
+    }
+    for(let x = 0; x < w; x++){
+      let sum = 0;
+      for(let y = 0; y < r; y++) sum += tmp[y*w + x];
+      for(let y = 0; y < h; y++){
+        if(y + r < h)         sum += tmp[(y+r)*w + x];
+        if(y - r - 1 >= 0)    sum -= tmp[(y-r-1)*w + x];
+        dst[y*w + x] = sum * k;
+      }
+    }
+    return dst;
+  }
+
+  let blurred = boxBlur(bin, W, H, 6);
+  blurred     = boxBlur(blurred, W, H, 6);
+  blurred     = boxBlur(blurred, W, H, 4);
+
+  for(let i = 0, j = 0; i < d.length; i += 4, j++){
+    const v = Math.min(1, blurred[j] * 1.6);
+    d[i] = 255; d[i+1] = 255; d[i+2] = 255;
+    d[i+3] = Math.round(v * 255);
+  }
+  c.putImageData(id, 0, 0);
+  return cvT;
+}
+
+// =====================================================================
+// WebGL: full-screen quad shader — bg slide + glass logo with refraction
+// =====================================================================
+const VS_FULL = `
+  varying vec2 vUv;
+  void main(){
+    vUv = position.xy * 0.5 + 0.5;
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+  }
+`;
+
+const FS_GLASS = `
+  precision highp float;
+
+  uniform sampler2D uBg;
+  uniform sampler2D uLogo;
+  uniform vec2  uLogoExtent;
+  uniform vec2  uLogoOffset;
+  uniform vec2  uPxLogo;
+  uniform vec2  uMouse;
+  uniform vec3  uPageColor;
+  uniform float uLogoAlpha;
+  varying vec2 vUv;
+
+  vec3 sampleScene(vec2 uv){
+    return texture2D(uBg, uv).rgb;
+  }
+
+  vec3 applyGlass(vec3 baseCol, vec2 uv, vec3 normal, float a){
+    float refrAmount = 0.1;
+    vec2 refrOffset = -normal.xy * refrAmount * a;
+
+    float aberr = 0.016;
+    vec3 color;
+    color.r = sampleScene(uv + refrOffset * (1.0 + aberr)).r;
+    color.g = sampleScene(uv + refrOffset).g;
+    color.b = sampleScene(uv + refrOffset * (1.0 - aberr)).b;
+
+    vec3 reflDir = reflect(vec3(0.0, 0.0, -1.0), normal);
+    float t = reflDir.y * 0.5 + 0.5;
+    vec3 envCol = mix(vec3(0.45, 0.48, 0.55), vec3(1.0), smoothstep(0.0, 1.0, t));
+
+    vec3 lightDir = normalize(vec3(0.4 + uMouse.x * 0.7, 0.9, 0.9));
+    vec3 halfDir = normalize(lightDir + vec3(0.0, 0.0, 1.0));
+
+    float ndh = max(dot(normal, halfDir), 0.0);
+    float spec = pow(ndh, 70.0) * 3.2;
+    float spec2 = pow(ndh, 22.0) * 0.45;
+
+    float fres = pow(1.0 - max(normal.z, 0.0), 3.0);
+
+    color = mix(color, envCol, fres * 0.55);
+    color += spec + spec2;
+    color = mix(color, vec3(1.0), fres * 0.5);
+
+    float edge = smoothstep(0.0, 0.18, a);
+    float refrMag = length(refrOffset) * 32.0;
+    float alpha = clamp(max(refrMag, fres * 0.85 + spec * 1.5 + spec2 * 0.6) + 0.12, 0.0, 1.0);
+    alpha *= edge;
+
+    return mix(baseCol, color, alpha);
+  }
+
+  void main(){
+    vec2 uv = vUv;
+    vec3 col = sampleScene(uv);
+
+    // Logo glass
+    vec2 logoUV = (uv - vec2(0.5) - uLogoOffset) / uLogoExtent + 0.5;
+    if(logoUV.x >= 0.0 && logoUV.x <= 1.0 && logoUV.y >= 0.0 && logoUV.y <= 1.0){
+      float a = texture2D(uLogo, logoUV).a;
+      if(a >= 0.005){
+        float aL = texture2D(uLogo, logoUV - vec2(uPxLogo.x, 0.0)).a;
+        float aR = texture2D(uLogo, logoUV + vec2(uPxLogo.x, 0.0)).a;
+        float aD = texture2D(uLogo, logoUV - vec2(0.0, uPxLogo.y)).a;
+        float aU = texture2D(uLogo, logoUV + vec2(0.0, uPxLogo.y)).a;
+        vec3 normal = normalize(vec3((aL - aR) * 9.0, (aD - aU) * 9.0, 1.0));
+        col = applyGlass(col, uv, normal, a * uLogoAlpha);
+      }
+    }
+
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
+let three = null;
+const logoImg = new Image();
+
+function initThree(){
+  if(three) return;
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+  renderer.domElement.id = 'three';
+  document.body.appendChild(renderer.domElement);
+
+  const scene  = new THREE.Scene();
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+  const bgTex = new THREE.CanvasTexture(sceneCanvas);
+  bgTex.colorSpace = THREE.LinearSRGBColorSpace;
+  bgTex.minFilter  = THREE.LinearFilter;
+  bgTex.magFilter  = THREE.LinearFilter;
+
+  // Fixed-size logo canvas — texture dimensions never change so the upload
+  // path is bullet-proof. The thickness map is drawn into it (scaled to fit).
+  const LOGO_TEX_W = 1024;
+  const LOGO_TEX_H = Math.round(LOGO_TEX_W / ASPECT_LOGO);
+  const logoCanvas = document.createElement('canvas');
+  logoCanvas.width  = LOGO_TEX_W;
+  logoCanvas.height = LOGO_TEX_H;
+  // Initial visible content so we know the shader path works even before
+  // logo.png finishes loading.
+  {
+    const c0 = logoCanvas.getContext('2d');
+    c0.fillStyle = 'rgba(255,255,255,1)';
+    c0.fillRect(0, 0, LOGO_TEX_W, LOGO_TEX_H);
+  }
+  const logoTex = new THREE.CanvasTexture(logoCanvas);
+  logoTex.colorSpace = THREE.LinearSRGBColorSpace;
+  logoTex.minFilter  = THREE.LinearFilter;
+  logoTex.magFilter  = THREE.LinearFilter;
+  logoTex.needsUpdate = true;
+
+  function setLogoFrom(img){
+    try {
+      const built = buildThicknessMap(img);
+      const c = logoCanvas.getContext('2d');
+      c.clearRect(0, 0, LOGO_TEX_W, LOGO_TEX_H);
+      c.drawImage(built, 0, 0, LOGO_TEX_W, LOGO_TEX_H);
+      logoTex.needsUpdate = true;
+      console.log('logo thickness map ready', built.width, 'x', built.height);
+    } catch(e){
+      console.error('logo build failed', e);
+    }
+  }
+  logoImg.onload  = () => setLogoFrom(logoImg);
+  logoImg.onerror = (e) => console.error('logo.png failed to load', e);
+  logoImg.src = 'logo.png';
+
+  const pageCol = new THREE.Color(0xD9D9D9);
+  // no convertSRGBToLinear — we stay in raw byte space
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uBg:         { value: bgTex },
+      uLogo:       { value: logoTex },
+      uLogoExtent: { value: new THREE.Vector2(0.6, 0.2) },
+      uLogoOffset: { value: new THREE.Vector2(0, 0) },
+      uPxLogo:     { value: new THREE.Vector2(1/LOGO_TEX_W, 1/LOGO_TEX_H) },
+      uMouse:      { value: new THREE.Vector2() },
+      uPageColor:  { value: new THREE.Vector3(pageCol.r, pageCol.g, pageCol.b) },
+      uLogoAlpha:  { value: 1.0 },
+    },
+    vertexShader:   VS_FULL,
+    fragmentShader: FS_GLASS,
+    depthTest:      false,
+    depthWrite:     false,
+  });
+
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
+  scene.add(quad);
+
+  three = { renderer, scene, camera, mat, quad, bgTex, logoTex, logoCanvas };
+
+  fit3d();
+}
+
+function fit3d(){
+  if(!three) return;
+  const W = window.innerWidth, H = window.innerHeight;
+  three.renderer.setSize(W, H);
+
+  // Logo extent: 60% of screen width, height derived from the logo aspect
+  const extentX = isMobile() ? 0.85 : 0.6;
+  const extentY = extentX * (W / H) / ASPECT_LOGO;
+  three.mat.uniforms.uLogoExtent.value.set(extentX, extentY);
+
+  if(three.logoCanvas.width > 4){
+    three.mat.uniforms.uPxLogo.value.set(
+      1 / three.logoCanvas.width,
+      1 / three.logoCanvas.height
+    );
+  }
+}
+
+let logoOffX = 0, logoOffY = 0;
+let storyT  = 0;
+let gridT   = 0;
+let brandsT = 0;
+let footerT = 0;
+let wrapT     = 0;
+let wrapDollT = 0;
+let endingT   = 0;
+let modelT    = 0;
+let joinT     = 0;
+let joinHits  = [];
+let joinHoverIdx = -1;
+const ENDING_LINES = ['A CREATION', 'A PORTRAIT', 'A RITUAL', 'A GESTURE', 'A LOVE LETTER', 'A BAG'];
+
+let endingIdx = 0;
+let endingPrevIdx = 0;
+let endingTransT = 1;     // 1 = settled, 0 = just changed
+let endingDir = 1;        // +1 = next word from below, -1 = previous from above
+function changeEndingWord(newIdx){
+  endingDir = newIdx > endingIdx ? 1 : -1;
+  endingPrevIdx = endingIdx;
+  endingIdx = newIdx;
+  endingTransT = 0;
+}
+let marqueeOffset = 0;
+const MARQUEE_SPEED = 3.0;   // px / frame
+const storyEl = document.getElementById('story');
+const outroEl = document.getElementById('outro');
+const wrapEl  = document.getElementById('wrap');
+
+// Brands shown in the next screen — names + optional SVG file under ./brands/
+const BRANDS = [
+  "Louis Vuitton","Dior","Prada","Bottega Veneta","Balmain",
+  "Hermès","Chanel","Gucci","Moncler","AMI Paris",
+  "Róhe","DeMellier London","Tolu Coker","Vaquera"
+];
+const brandImgs = BRANDS.map(name => {
+  const slug = name.toLowerCase()
+    .replace(/è|é/g, 'e').replace(/ó/g, 'o')
+    .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const im = new Image();
+  im.dataset.name = name;
+  im.src = `brands/${slug}.svg`;
+  im.onerror = () => { im._failed = true; };
+  return im;
+});
+
+// Grid permutation — reshuffled every 500ms while the grid is visible
+let gridPerm = [0, 1, 2, 3, 4, 5];
+function shuffleGrid(){
+  const a = Math.floor(Math.random() * gridPerm.length);
+  let b = Math.floor(Math.random() * (gridPerm.length - 1));
+  if(b >= a) b++;
+  [gridPerm[a], gridPerm[b]] = [gridPerm[b], gridPerm[a]];
+}
+setInterval(() => { if(gridT > 0.05) shuffleGrid(); }, 800);
+
+// ---- Split text into per-letter spans + cache natural positions ----
+const letters      = [];
+const outroLetters = [];
+const wrapLetters  = [];
+const storyBase    = { left: 0, top: 0 };
+const outroBase    = { left: 0, top: 0 };
+const wrapBase     = { left: 0, top: 0 };
+
+function splitTextEl(el){
+  const ps = el.querySelectorAll('p');
+  for(const p of ps){
+    const text = p.textContent;
+    p.textContent = '';
+    const words = text.split(' ');
+    for(let wi = 0; wi < words.length; wi++){
+      if(wi > 0){
+        // space between words — own span, allows line break here
+        const sp = document.createElement('span');
+        sp.textContent = '\u00A0';
+        sp.className = 'ltr';
+        p.appendChild(sp);
+      }
+      // wrap word letters in a nowrap container so the word stays whole
+      const wordWrap = document.createElement('span');
+      wordWrap.style.whiteSpace = 'nowrap';
+      wordWrap.style.display = 'inline';
+      for(const ch of words[wi]){
+        const span = document.createElement('span');
+        span.textContent = ch;
+        span.className = 'ltr';
+        wordWrap.appendChild(span);
+      }
+      p.appendChild(wordWrap);
+    }
+  }
+}
+function cacheLetters(el, arr, base){
+  arr.length = 0;
+  const prevVis = el.style.visibility;
+  el.style.visibility = 'hidden';
+  const containerRect = el.getBoundingClientRect();
+  base.left = containerRect.left;
+  base.top  = containerRect.top;
+  const ltrEls = el.querySelectorAll('.ltr');
+  for(const ltrEl of ltrEls){
+    const r = ltrEl.getBoundingClientRect();
+    arr.push({
+      ch:  ltrEl.textContent === '\u00A0' ? ' ' : ltrEl.textContent,
+      offX: r.left - containerRect.left + r.width  / 2,
+      offY: r.top  - containerRect.top  + r.height / 2,
+      w:   r.width,
+      dx: 0, dy: 0, tdx: 0, tdy: 0,
+      ddx: 0, ddy: 0,
+      ddx0: 0, ddy0: 0,         // wrap layout target with no doll obstacle
+      ddxFull: 0, ddyFull: 0,   // wrap layout target with the doll obstacle
+      hide: false,
+    });
+  }
+  el.style.visibility = prevVis;
+}
+
+// Per-letter horizontal push so wrap-text letters stay on their original
+// baseline but slide left/right to clear the doll silhouette.
+const DOLL_PADDING = isMobile() ? 15 : 40;
+function computeWrapLetterPush(){
+  if(!wrapLetters.length) return;
+  const W = window.innerWidth, H = window.innerHeight;
+  const wrapScale = isMobile() ? 0.5 : 1;
+  let dispH = Math.round(H * 0.94 * wrapScale);
+  let dispW = Math.round(dispH * ASPECT);
+  if(dispW > W * 0.96 * wrapScale){
+    dispW = Math.round(W * 0.96 * wrapScale);
+    dispH = Math.round(dispW / ASPECT);
+  }
+  const dollRect = { x: (W - dispW) / 2, y: (H - dispH) / 2, w: dispW, h: dispH };
+  const mask = wrapMaskCache;
+  if(!mask){
+    for(const L of wrapLetters){ L.ddx = 0; L.ddy = 0; }
+    return;
+  }
+
+  // Build per-mask-row horizontal extents in screen pixels.
+  const rows = [];
+  for(let my = 0; my < mask.h; my++){
+    let mLeft = -1, mRight = -1;
+    for(let mx = 0; mx < mask.w; mx++){
+      if(mask.mask[my * mask.w + mx]){
+        if(mLeft < 0) mLeft = mx;
+        mRight = mx;
+      }
+    }
+    if(mLeft >= 0){
+      rows.push({
+        sxLeft:  dollRect.x + (mLeft       / mask.w) * dollRect.w,
+        sxRight: dollRect.x + ((mRight + 1)/ mask.w) * dollRect.w,
+        syTop:   dollRect.y + (my          / mask.h) * dollRect.h,
+        syBot:   dollRect.y + ((my + 1)    / mask.h) * dollRect.h,
+      });
+    }
+  }
+
+  // For each letter line Y, find the union of row extents within ±padding,
+  // then expand horizontally by padding too.
+  const extentByY = new Map();
+  function extentAt(screenY){
+    if(extentByY.has(screenY)) return extentByY.get(screenY);
+    let leftX = Infinity, rightX = -Infinity;
+    for(const r of rows){
+      if(r.syBot < screenY - DOLL_PADDING || r.syTop > screenY + DOLL_PADDING) continue;
+      if(r.sxLeft  < leftX)  leftX  = r.sxLeft;
+      if(r.sxRight > rightX) rightX = r.sxRight;
+    }
+    const ext = (leftX < Infinity)
+      ? [leftX - DOLL_PADDING, rightX + DOLL_PADDING]
+      : null;
+    extentByY.set(screenY, ext);
+    return ext;
+  }
+
+  // reset
+  for(const L of wrapLetters){
+    L.ddx = 0; L.ddy = 0;
+    L.ddx0 = 0; L.ddy0 = 0;
+    L.ddxFull = 0; L.ddyFull = 0;
+    L.hide = false;
+  }
+
+  const containerLeft  = wrapBase.left;
+  const containerRight = wrapBase.left + W * 0.90;
+  const lineHeight     = textFontSize * 1.15;
+  const paraThreshold  = lineHeight * 1.35;
+
+  // Group letters into words (and treat spaces as their own "word" so they
+  // can be skipped when starting a new line).
+  const words = [];
+  {
+    let cur = [];
+    for(const L of wrapLetters){
+      if(L.ch === ' '){
+        if(cur.length){ words.push({letters: cur, isSpace: false}); cur = []; }
+        words.push({letters: [L], isSpace: true});
+      } else {
+        cur.push(L);
+      }
+    }
+    if(cur.length) words.push({letters: cur, isSpace: false});
+  }
+  for(let i = 1; i < words.length; i++){
+    const prevL = words[i-1].letters[words[i-1].letters.length - 1];
+    const curL  = words[i].letters[0];
+    if(prevL && curL && (curL.offY - prevL.offY) > paraThreshold){
+      words[i].isParaStart = true;
+    }
+  }
+
+  // Layout function — packs words into lines, breaks long words if needed.
+  // useObstacle: when false, the doll silhouette is ignored (text fills full width).
+  function doLayout(startY, useObstacle){
+    const extentFn = useObstacle ? extentAt : (() => null);
+    const placements = [];
+    let lineY = startY;
+    let cursorX = containerLeft;
+    function newLine(){ cursorX = containerLeft; lineY += lineHeight; }
+
+    function placeLetters(letters, atX){
+      let cur = atX;
+      for(const L of letters){
+        placements.push({ L, x: cur + L.w / 2, y: lineY });
+        cur += L.w;
+      }
+      return cur;
+    }
+
+    // Try to place a sequence of letters word-by-word into the current
+    // segment. Returns the count of letters placed (may be partial for
+    // forced word break).
+    function placeWordOrBreak(word){
+      const wordWidth = word.letters.reduce((s, L) => s + L.w, 0);
+      for(let attempt = 0; attempt < 200; attempt++){
+        const ext = extentFn(Math.round(lineY));
+        if(ext && cursorX < ext[1] && cursorX + wordWidth > ext[0]){
+          cursorX = ext[1];
+        }
+        const segEnd = (ext && cursorX < ext[0]) ? ext[0] : containerRight;
+        if(cursorX + wordWidth <= segEnd){
+          cursorX = placeLetters(word.letters, cursorX);
+          return true;
+        }
+        // Word doesn't fit in this segment. If word is wider than the
+        // entire container width, we have to force-break it.
+        const segWidth = segEnd - cursorX;
+        if(word.letters.length > 1 && wordWidth > containerRight - containerLeft && segWidth > textFontSize * 1.2){
+          let used = 0; let take = 0;
+          for(let k = 0; k < word.letters.length - 1; k++){
+            if(used + word.letters[k].w > segWidth) break;
+            used += word.letters[k].w;
+            take++;
+          }
+          if(take > 0){
+            const head = word.letters.slice(0, take);
+            const tail = word.letters.slice(take);
+            cursorX = placeLetters(head, cursorX);
+            // Continue with the rest as a new word on the next attempt
+            word = { letters: tail, isSpace: false };
+            // try next segment / next line
+            if(ext && cursorX < ext[1]) cursorX = ext[1];
+            else newLine();
+            continue;
+          }
+        }
+        newLine();
+      }
+      return false;
+    }
+
+    for(const word of words){
+      if(word.isParaStart){ newLine(); lineY += lineHeight * 0.35; }
+      if(word.isSpace && cursorX === containerLeft) continue;
+      const placed = placeWordOrBreak(word);
+      if(!placed) for(const L of word.letters) L.hide = true;
+    }
+    return { placements, finalY: lineY, firstY: startY };
+  }
+
+  // Two-pass layout for vertical centering — done WITH the doll obstacle
+  let startY = wrapBase.top + lineHeight / 2;
+  let res = doLayout(startY, true);
+  for(let iter = 0; iter < 3; iter++){
+    const blockTop = res.firstY - lineHeight / 2;
+    const blockBot = res.finalY + lineHeight / 2;
+    const blockH = blockBot - blockTop;
+    const targetTop = (H - blockH) / 2;
+    const newStart = targetTop + lineHeight / 2;
+    if(Math.abs(newStart - startY) < 1) break;
+    startY = newStart;
+    res = doLayout(startY, true);
+  }
+  // No-obstacle layout uses the same startY so paragraphs line up
+  const resNoObs = doLayout(startY, false);
+
+  // Justify post-processing: stretch each segment so its right edge meets
+  // the segment bound.
+  {
+    const lineMap = new Map();
+    let maxY = -Infinity;
+    for(const p of res.placements){
+      const k = Math.round(p.y);
+      if(!lineMap.has(k)) lineMap.set(k, []);
+      lineMap.get(k).push(p);
+      if(k > maxY) maxY = k;
+    }
+    for(const [y, line] of lineMap){
+      line.sort((a, b) => a.x - b.x);
+      const ext = extentAt(y);
+      const sigGap = textFontSize * 0.4;
+      const segs = [[line[0]]];
+      for(let i = 1; i < line.length; i++){
+        const prev = line[i - 1];
+        const cur  = line[i];
+        const gap  = (cur.x - cur.L.w / 2) - (prev.x + prev.L.w / 2);
+        if(gap > sigGap) segs.push([cur]);
+        else segs[segs.length - 1].push(cur);
+      }
+      const isLastLine = (y === maxY);
+      for(let s = 0; s < segs.length; s++){
+        const seg = segs[s];
+        if(isLastLine && s === segs.length - 1) continue;
+        let segEnd = containerRight;
+        if(ext && segs.length > 1 && s === 0) segEnd = ext[0];
+        const segStart = seg[0].x - seg[0].L.w / 2;
+        const segWidth = segEnd - segStart;
+        const lastP = seg[seg.length - 1];
+        const segRight = lastP.x + lastP.L.w / 2;
+        const leftover = segEnd - segRight;
+        if(leftover < 1) continue;
+        if(leftover > segWidth * 0.4) continue;
+        let spaceCount = 0;
+        for(const p of seg) if(p.L.ch === ' ') spaceCount++;
+        if(spaceCount === 0) continue;
+        const extra = leftover / spaceCount;
+        let accum = 0;
+        for(const p of seg){
+          p.x += accum;
+          if(p.L.ch === ' ') accum += extra;
+        }
+      }
+    }
+  }
+
+  // Store both layouts on letters: ddx0/ddy0 (no obstacle) and ddxFull/ddyFull (with obstacle)
+  for(const p of res.placements){
+    const L = p.L;
+    const origCenter = wrapBase.left + L.offX;
+    const origY      = wrapBase.top  + L.offY;
+    L.ddxFull = p.x - origCenter;
+    L.ddyFull = p.y - origY;
+  }
+  for(const p of resNoObs.placements){
+    const L = p.L;
+    const origCenter = wrapBase.left + L.offX;
+    const origY      = wrapBase.top  + L.offY;
+    L.ddx0 = p.x - origCenter;
+    L.ddy0 = p.y - origY;
+  }
+}
+splitTextEl(storyEl);
+splitTextEl(outroEl);
+splitTextEl(wrapEl);
+requestAnimationFrame(() => requestAnimationFrame(computeUnifiedFont));
+addEventListener('resize', () => requestAnimationFrame(computeUnifiedFont));
+if(document.fonts && document.fonts.ready){
+  document.fonts.ready.then(() => computeUnifiedFont());
+}
+
+function loop3d(){
+  if(!three){ return; }
+  three.mat.uniforms.uMouse.value.set(mouseNx, mouseNy);
+
+  const ext = three.mat.uniforms.uLogoExtent.value;
+  if(isMobile()){
+    // Mobile: logo fixed position per screen
+    let targetLogoX = 0;
+    let targetLogoY = 0;
+    let targetLogoAlpha = 1;
+    if(storyT > 0.5){
+      targetLogoY = 0.5 - ext.y * 0.5 - 0.03;
+    }
+    if(gridT > 0.5){
+      targetLogoAlpha = 0;
+    }
+    if(brandsT > 0.5){
+      targetLogoAlpha = 0;
+    }
+    if(wrapT > 0.5){
+      targetLogoY = -(0.5 - ext.y * 0.5 - 0.01);
+      targetLogoAlpha = 1;
+    }
+    if(endingT > 0.5){
+      targetLogoAlpha = 0;
+    }
+    if(modelT > 0.5){
+      targetLogoY = 0;
+      targetLogoAlpha = 1;
+    }
+    if(joinT > 0.5){
+      targetLogoAlpha = 0;
+    }
+    logoOffX += (targetLogoX - logoOffX) * 0.08;
+    logoOffY += (targetLogoY - logoOffY) * 0.08;
+    three.mat.uniforms.uLogoOffset.value.set(logoOffX, logoOffY);
+    const curAlpha = three.mat.uniforms.uLogoAlpha.value;
+    three.mat.uniforms.uLogoAlpha.value += (targetLogoAlpha - curAlpha) * 0.08;
+  } else {
+    // Desktop: logo follows mouse, fades only on join
+    const targetX = mouseNx;
+    const targetY = -mouseNy;
+    logoOffX += (targetX - logoOffX) * 0.08;
+    logoOffY += (targetY - logoOffY) * 0.08;
+    three.mat.uniforms.uLogoOffset.value.set(logoOffX, logoOffY);
+    three.mat.uniforms.uLogoAlpha.value = 1 - joinT;
+  }
+
+  // Cursor pointer when hovering over corner links
+  joinHoverIdx = -1;
+  if(inJoin && joinT > 0.5 && joinHits.length){
+    let over = false;
+    for(const h of joinHits){
+      if(mouseX >= h.x && mouseX <= h.x + h.w && mouseY >= h.y && mouseY <= h.y + h.h){ over = true; joinHoverIdx = h.idx; break; }
+    }
+    document.body.style.cursor = over ? 'pointer' : 'default';
+  } else {
+    document.body.style.cursor = '';
+  }
+
+  // State lerps
+  storyT  += ((inStory  ? 1 : 0) - storyT ) * 0.07;
+  gridT   += ((inGrid   ? 1 : 0) - gridT  ) * 0.07;
+  brandsT += ((inBrands ? 1 : 0) - brandsT) * 0.07;
+  footerT += ((inFooter ? 1 : 0) - footerT) * 0.07;
+  wrapT     += ((inWrap     ? 1 : 0) - wrapT    ) * 0.07;
+  if(!inWrap && wrapT < 0.01) inWrapDoll = false;
+  wrapDollT += ((inWrapDoll ? 1 : 0) - wrapDollT) * 0.07;
+  endingT   += ((inEnding   ? 1 : 0) - endingT  ) * 0.07;
+  modelT  += ((inModel  ? 1 : 0) - modelT ) * 0.07;
+  joinT   += ((inJoin   ? 1 : 0) - joinT  ) * 0.07;
+  if(endingTransT < 1) endingTransT = Math.min(1, endingTransT + 0.07);
+  if(slideT < 1) slideT = Math.min(1, slideT + 0.04);
+  marqueeOffset += MARQUEE_SPEED;
+
+  // Letter repulsion targets — based on the entire logo ellipse
+  {
+    const W = window.innerWidth, H = window.innerHeight;
+    const logoCenterX = (0.5 + logoOffX) * W;
+    const logoCenterY = (0.5 - logoOffY) * H;
+    const ext = three.mat.uniforms.uLogoExtent.value;
+    const logoHalfW = ext.x * W * 0.5;
+    const logoHalfH = ext.y * H * 0.5;
+    const REACH = 1.25;
+    const PUSH  = 180;
+
+    function repel(arr, base, baseOffsetY, active){
+      for(let i = 0; i < arr.length; i++){
+        const L = arr[i];
+        const lx = base.left + L.offX;
+        const ly = base.top  + L.offY + baseOffsetY;
+        const dx = lx - logoCenterX;
+        const dy = ly - logoCenterY;
+        const nx = dx / logoHalfW;
+        const ny = dy / logoHalfH;
+        const nd = Math.sqrt(nx*nx + ny*ny);
+        if(active && nd < REACH){
+          const f = (REACH - nd) / REACH;
+          const len = Math.sqrt(dx*dx + dy*dy) + 0.001;
+          const ff = f * f * PUSH;
+          L.tdx = (dx / len) * ff;
+          L.tdy = (dy / len) * ff;
+        } else {
+          L.tdx = 0; L.tdy = 0;
+        }
+        // static doll-silhouette push (only set on wrap letters)
+        L.tdx += L.ddx;
+        L.tdy += L.ddy;
+        L.dx += (L.tdx - L.dx) * 0.18;
+        L.dy += (L.tdy - L.dy) * 0.18;
+      }
+    }
+    const storyOffsetY = (1 - storyT) * H - gridT * H * 1.2;
+    const outroOffsetY = (1 - brandsT) * H;
+    repel(letters,      storyBase, storyOffsetY, storyT  > 0.05);
+    if(brandsT < 0.03 || wrapT > 0.3){
+      for(const L of outroLetters){ L.dx = 0; L.dy = 0; L.tdx = 0; L.tdy = 0; }
+    }
+    repel(outroLetters, outroBase, outroOffsetY, brandsT > 0.05 && wrapT < 0.08);
+    // Wrap letters: blend between no-doll and with-doll layout via wrapDollT
+    for(const L of wrapLetters){
+      L.ddx = (L.ddx0 || 0) * (1 - wrapDollT) + (L.ddxFull || 0) * wrapDollT;
+      L.ddy = (L.ddy0 || 0) * (1 - wrapDollT) + (L.ddyFull || 0) * wrapDollT;
+    }
+    repel(wrapLetters,  wrapBase,  0,            false);
+  }
+
+  // Compose the visible scene into the canvas the shader samples
+  drawScene();
+
+  if(three.logoCanvas.width > 4){
+    three.mat.uniforms.uPxLogo.value.set(
+      1 / three.logoCanvas.width,
+      1 / three.logoCanvas.height
+    );
+  }
+  three.renderer.render(three.scene, three.camera);
+  requestAnimationFrame(loop3d);
+}
+
+// =====================================================================
+// Navigation (instant slide swap, no dissolve)
+// =====================================================================
+let inStory = false;
+let inGrid  = false;
+let inBrands = false;
+let inFooter = false;
+let inWrap   = false;
+let inEnding = false;
+let inModel  = false;
+let inJoin   = false;
+function enterStory(){  inStory  = true; }
+function exitStory(){   inStory  = false; }
+function enterGrid(){   inGrid   = true; }
+function exitGrid(){    inGrid   = false; }
+function enterBrands(){ inBrands = true; }
+function exitBrands(){  inBrands = false; }
+function enterFooter(){ inFooter = true; }
+function exitFooter(){  inFooter = false; }
+let inWrapDoll = false;
+function enterWrap(){
+  inWrap = true; inWrapDoll = true; wrapDollT = 1;
+  computeWrapLetterPush();
+  for(const L of wrapLetters){
+    L.ddx = L.ddxFull || 0;
+    L.ddy = L.ddyFull || 0;
+    L.dx = L.ddx; L.dy = L.ddy;
+    L.tdx = L.ddx; L.tdy = L.ddy;
+  }
+}
+function exitWrap(){    inWrap   = false; /* inWrapDoll resets after wrapT fades out */ }
+function enterEnding(){ inEnding = true; }
+function exitEnding(){  inEnding = false; }
+function enterModel(){  inModel  = true; }
+function exitModel(){   inModel  = false; }
+function enterJoin(){   inJoin   = true; }
+function exitJoin(){    inJoin   = false; }
+
+function gotoSlide(newIdx){
+  prevIdx = idx;
+  idx = newIdx;
+  slideT = 0;
+  updateNav();
+}
+function next(){
+  if(inJoin) return;
+  if(inModel){ enterJoin(); return; }
+  if(inEnding){
+    if(endingIdx < ENDING_LINES.length - 1){ changeEndingWord(endingIdx + 1); return; }
+    enterModel(); return;
+  }
+  if(inWrap){
+    enterEnding(); endingIdx = 0; return;
+  }
+  if(inBrands){ enterWrap(); return; }
+  if(inGrid){ enterBrands(); return; }
+  if(inStory){ enterGrid(); return; }
+  if(idx === SRC.length - 1){ enterStory(); return; }
+  gotoSlide(idx + 1);
+}
+function prev(){
+  if(inJoin){ exitJoin(); return; }
+  if(inModel){ exitModel(); return; }
+  if(inEnding){
+    if(endingIdx > 0){ changeEndingWord(endingIdx - 1); return; }
+    exitEnding(); return;
+  }
+  if(inWrap){
+    exitWrap(); return;
+  }
+  if(inBrands){ exitBrands(); return; }
+  if(inGrid){ exitGrid(); return; }
+  if(inStory){ exitStory(); return; }
+  if(idx === 0) return;
+  gotoSlide(idx - 1);
+}
+
+let lock = false;
+let scrollAccum = 0;
+let scrollTimer = null;
+const SCROLL_THRESHOLD = 80;
+addEventListener('wheel', e => {
+  if(lock) return;
+  const d = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+  scrollAccum += d;
+  if(scrollTimer) clearTimeout(scrollTimer);
+  scrollTimer = setTimeout(() => { scrollAccum = 0; }, 200);
+  if(Math.abs(scrollAccum) >= SCROLL_THRESHOLD){
+    lock = true; setTimeout(() => lock = false, 500);
+    if(scrollAccum > 0) next(); else prev();
+    scrollAccum = 0;
+  }
+}, { passive: true });
+
+addEventListener('keydown', e => {
+  if(e.key === 'ArrowRight' || e.key === 'ArrowDown') next();
+  else if(e.key === 'ArrowLeft' || e.key === 'ArrowUp') prev();
+});
+
+// Touch / swipe support for mobile
+let touchStartY = 0, touchStartX = 0, touchLock = false;
+addEventListener('touchstart', e => {
+  touchStartY = e.touches[0].clientY;
+  touchStartX = e.touches[0].clientX;
+}, { passive: true });
+addEventListener('touchend', e => {
+  if(touchLock) return;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const d = Math.abs(dy) > Math.abs(dx) ? dy : dx;
+  if(Math.abs(d) < 40) return; // ignore taps / small movements
+  touchLock = true; setTimeout(() => touchLock = false, 500);
+  if(d < 0) next(); else prev();
+}, { passive: true });
+
+// Click on the homepage slide → jump straight to the wrap state.
+// Click on the JOIN WAITING LIST text → open mail client.
+addEventListener('click', e => {
+  // Corner links click
+  if(inJoin && joinT > 0.5 && joinHits.length){
+    for(const h of joinHits){
+      if(e.clientX >= h.x && e.clientX <= h.x + h.w &&
+         e.clientY >= h.y && e.clientY <= h.y + h.h){
+        if(h.idx === 0){
+          const subject = encodeURIComponent('PUPSIK for someone worth it');
+          const body = encodeURIComponent(
+            "Please fill in the blanks before sending.\n\n" +
+            "I'd like to commission a PUPSIK for someone I know well enough to know they deserve one.\n\n" +
+            "Her name is ___. She is the kind of person who ___. The things she reaches for without thinking: ___. The details only someone close to her would notice: ___.\n\n" +
+            "Her Instagram is ___. There may be more there than words can say.\n\n" +
+            "I'm happy to cover the €1250. That part is simple. Getting this right is the part that matters.\n"
+          );
+          window.location.href = `mailto:love@pupsik.website?subject=${subject}&body=${body}`;
+        }
+        else if(h.idx === 1) window.open('tg://resolve?domain=olgaviorel','_blank');
+        return;
+      }
+    }
+  }
+  // Homepage slide → jump to wrap
+  if(inStory || inGrid || inBrands || inWrap || inEnding || inModel || inJoin) return;
+  const W = window.innerWidth, H = window.innerHeight;
+  let dispH = Math.round(H * 0.94);
+  let dispW = Math.round(dispH * ASPECT);
+  if(dispW > W * 0.96){
+    dispW = Math.round(W * 0.96);
+    dispH = Math.round(dispW / ASPECT);
+  }
+  const sx = (W - dispW) / 2;
+  const sy = (H - dispH) / 2;
+  if(e.clientX >= sx && e.clientX < sx + dispW &&
+     e.clientY >= sy && e.clientY < sy + dispH){
+    enterWrap();
+  }
+});
+
+let mouseX = 0, mouseY = 0;
+addEventListener('mousemove', e => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+  mouseNx = (mouseX / window.innerWidth)  - 0.5;
+  mouseNy = (mouseY / window.innerHeight) - 0.5;
+});
+addEventListener('touchmove', e => {
+  mouseX = e.touches[0].clientX;
+  mouseY = e.touches[0].clientY;
+  mouseNx = (mouseX / window.innerWidth)  - 0.5;
+  mouseNy = (mouseY / window.innerHeight) - 0.5;
+}, { passive: true });
+
+addEventListener('resize', () => { fit3d(); resizeScene(); });
+
+function updateNav(){
+  [...nav.children].forEach((el, i) => el.classList.toggle('on', i === idx));
+}
+
+// =====================================================================
+// Build
+// =====================================================================
+SRC.forEach((s, i) => {
+  const im = new Image();
+  im.onload = () => { if(i === idx) updateNav(); };
+  im.src = s;
+  imgs.push(im);
+
+  const dot = document.createElement('i');
+  dot.addEventListener('click', () => {
+    if(inJoin)   exitJoin();
+    if(inModel)  exitModel();
+    if(inEnding) exitEnding();
+    if(inWrap)   exitWrap();
+    if(inBrands) exitBrands();
+    if(inGrid)   exitGrid();
+    if(inStory)  exitStory();
+    if(i !== idx) gotoSlide(i);
+  });
+  nav.appendChild(dot);
+});
+
+// Grid images (6 dolls for the 2×3 screen)
+GRID_SRC.forEach(s => {
+  const im = new Image();
+  im.src = s;
+  gridImgs.push(im);
+});
+
+// Wrap image (the centered doll behind the long editorial text)
+wrapImg.onload = () => {
+  // Build alpha mask once the image is in
+  const im = wrapImg;
+  const ir = im.naturalWidth / im.naturalHeight;
+  const w = ir > 1 ? MASK_RES : Math.round(MASK_RES * ir);
+  const h = ir > 1 ? Math.round(MASK_RES / ir) : MASK_RES;
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const c = cv.getContext('2d');
+  c.drawImage(im, 0, 0, w, h);
+  const data = c.getImageData(0, 0, w, h).data;
+  const mask = new Uint8Array(w * h);
+  for(let k = 0, j = 0; k < data.length; k += 4, j++){
+    if(data[k + 3] > 32) mask[j] = 1;
+  }
+  wrapMaskCache = { mask, w, h };
+  if(inWrap) computeWrapLetterPush();
+};
+wrapImg.src = WRAP_SRC;
+
+// Model image (rises from below in the model state)
+modelImg.src = MODEL_SRC;
+
+initThree();
+updateNav();
+requestAnimationFrame(loop3d);
+</script>
+</body>
+</html>
